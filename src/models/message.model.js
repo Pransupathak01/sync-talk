@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const messageSchema = new mongoose.Schema(
     {
-        roomId: String,
+        roomId: { type: String, index: true },
         sender: String,
         text: String,
     },
