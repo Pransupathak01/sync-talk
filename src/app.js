@@ -5,6 +5,7 @@ const Message = require("./models/message.model");
 const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
+const orderRoutes = require("./routes/orders.routes");
 
 const app = express();
 
@@ -29,5 +30,6 @@ app.get("/messages", async (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/orders", orderRoutes);
 
 module.exports = app;
