@@ -40,12 +40,44 @@ const userSchema = new mongoose.Schema(
             type: Date,
             default: Date.now,
         },
+
+
+        storeName: {
+            type: String,
+            default: function () { return this.username + "'s Store"; }
+        },
+
+        role: {
+            type: String,
+            default: "Virtual Dukandar"
+        },
+
+        referralCode: {
+            type: String,
+            unique: true
+        },
+
+        referredBy: {
+            type: String,
+            default: null
+        },
+
+        objEarnings: {
+            total: { type: Number, default: 0 },
+            pendingPayouts: { type: Number, default: 0 },
+            activeOrders: { type: Number, default: 0 }
+        }
     },
     { timestamps: true }
 );
 
 // Hash password before saving
+// Generate referral code before saving if not exists
 userSchema.pre("save", async function (next) {
+    if (!this.referralCode) {
+        this.referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+    }
+
     if (!this.isModified("password")) return next();
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
