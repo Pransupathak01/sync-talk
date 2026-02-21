@@ -8,6 +8,7 @@ const dashboardRoutes = require("./routes/dashboard.routes");
 const orderRoutes = require("./routes/orders.routes");
 const productRoutes = require("./routes/products.routes");
 const cartRoutes = require("./routes/cart.routes");
+const chatRoutes = require("./routes/chat.routes");
 
 const app = express();
 
@@ -35,5 +36,6 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/chat", chatRoutes);
 
 module.exports = app;
