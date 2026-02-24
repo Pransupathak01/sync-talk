@@ -10,40 +10,52 @@ exports.getDashboardSummary = async (req, res) => {
         const user = req.user;
         const userId = user._id;
 
-        // ─── 1. Compute Order Stats from DB ───
+        // ─── 1. Get Referred Users ───
+        const referredUsers = await User.find({ referredBy: user.referralCode }).select("_id");
+        const referredUserIds = referredUsers.map(u => u._id);
+
+        // ─── 2. Compute Order Stats from DB ───
         const now = new Date();
         const todayStart = new Date(now);
         todayStart.setHours(0, 0, 0, 0);
         const todayEnd = new Date(todayStart.getTime() + 86400000);
 
-        // Total earnings from all delivered orders
+        // Base match for orders: must be from a referred user OR tagged with user's referralCode
+        const orderMatch = {
+            $or: [
+                { user: { $in: referredUserIds } },
+                { referralCode: user.referralCode }
+            ]
+        };
+
+        // Total earnings from all delivered/shipped/processing orders
         const earningsAgg = await Order.aggregate([
-            { $match: { user: userId, status: { $in: ["Delivered", "Shipped", "Processing"] } } },
+            { $match: { ...orderMatch, status: { $in: ["Delivered", "Shipped", "Processing"] } } },
             { $group: { _id: null, totalEarnings: { $sum: "$earnings" } } }
         ]);
         const totalEarnings = earningsAgg.length > 0 ? earningsAgg[0].totalEarnings : 0;
 
         // Active orders (Processing + Shipped)
         const activeOrdersCount = await Order.countDocuments({
-            user: userId,
+            ...orderMatch,
             status: { $in: ["Processing", "Shipped"] }
         });
 
         // Orders placed today
         const todayOrdersCount = await Order.countDocuments({
-            user: userId,
+            ...orderMatch,
             date: { $gte: todayStart, $lt: todayEnd }
         });
 
         // Pending payouts = earnings from Delivered orders (not yet paid out)
         const pendingPayoutsAgg = await Order.aggregate([
-            { $match: { user: userId, status: "Delivered" } },
+            { $match: { ...orderMatch, status: "Delivered" } },
             { $group: { _id: null, pendingAmount: { $sum: "$earnings" } } }
         ]);
         const pendingPayouts = pendingPayoutsAgg.length > 0 ? pendingPayoutsAgg[0].pendingAmount : 0;
 
         // Total orders count
-        const totalOrdersCount = await Order.countDocuments({ user: userId });
+        const totalOrdersCount = await Order.countDocuments(orderMatch);
 
         // ─── 2. Referral Stats ───
         const referralCount = await User.countDocuments({ referredBy: user.referralCode });

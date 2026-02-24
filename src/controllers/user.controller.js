@@ -54,4 +54,38 @@ exports.getUserById = async (req, res) => {
     }
 };
 
+// @desc    Update user address
+// @route   PUT /api/users/address
+// @access  Private
+exports.updateAddress = async (req, res) => {
+    try {
+        const { fullName, phoneNumber, streetAddress, city, state, postalCode, country } = req.body;
 
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        user.address = {
+            fullName: fullName || user.address.fullName,
+            phoneNumber: phoneNumber || user.address.phoneNumber,
+            streetAddress: streetAddress || user.address.streetAddress,
+            city: city || user.address.city,
+            state: state || user.address.state,
+            postalCode: postalCode || user.address.postalCode,
+            country: country || user.address.country,
+        };
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: "Address updated successfully",
+            data: user.address
+        });
+    } catch (error) {
+        console.error("Error updating address:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+};

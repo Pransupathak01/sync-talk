@@ -66,6 +66,16 @@ const userSchema = new mongoose.Schema(
             total: { type: Number, default: 0 },
             pendingPayouts: { type: Number, default: 0 },
             activeOrders: { type: Number, default: 0 }
+        },
+
+        address: {
+            fullName: { type: String, default: "" },
+            phoneNumber: { type: String, default: "" },
+            streetAddress: { type: String, default: "" },
+            city: { type: String, default: "" },
+            state: { type: String, default: "" },
+            postalCode: { type: String, default: "" },
+            country: { type: String, default: "India" },
         }
     },
     { timestamps: true }

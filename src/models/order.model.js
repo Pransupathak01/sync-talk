@@ -18,8 +18,24 @@ const orderSchema = mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ["Delivered", "Processing", "Shipped", "Cancelled"],
-            default: "Processing",
+            enum: ["Delivered", "Processing", "Shipped", "Cancelled", "Pending"],
+            default: "Pending",
+        },
+        paymentMethod: {
+            type: String,
+            enum: ["UPI", "COD", "CARD"],
+            default: "UPI",
+        },
+        couponCode: {
+            type: String,
+            default: "",
+        },
+        referralCode: {
+            type: String,
+            default: "",
+        },
+        estimatedDelivery: {
+            type: Date,
         },
         date: {
             type: Date,
@@ -43,6 +59,15 @@ const orderSchema = mongoose.Schema(
         imageUrl: {
             type: String,
             default: "https://randomuser.me/api/portraits/lego/1.jpg",
+        },
+        shippingAddress: {
+            fullName: { type: String, required: true },
+            phoneNumber: { type: String, required: true },
+            streetAddress: { type: String, required: true },
+            city: { type: String, required: true },
+            state: { type: String, required: true },
+            postalCode: { type: String, required: true },
+            country: { type: String, required: true },
         },
     },
     {
