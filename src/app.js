@@ -1,4 +1,5 @@
 require("dotenv").config();
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const Message = require("./models/message.model");
@@ -17,6 +18,10 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Serve uploaded files (voice messages, etc.) as static assets
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
 
 app.get("/health", (req, res) => {
     res.send("SyncTalk API Running");

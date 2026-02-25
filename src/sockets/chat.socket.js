@@ -121,7 +121,7 @@ module.exports = (io) => {
         });
 
         // ─────────────────────────────────────────────────
-        // STEP 4 & 7: User sends message → Saved to DB
+        // STEP 4 & 7: User sends a TEXT message → Saved to DB
         // ─────────────────────────────────────────────────
         socket.on("send_message", async (data) => {
             try {
@@ -172,8 +172,6 @@ module.exports = (io) => {
                 const recipients = room.participants.filter(p => p.toString() !== userId);
 
                 recipients.forEach(async (recipientId) => {
-                    // We only send push notification if the user is NOT online in the socket
-                    // Or you can send it anyway if they are not active in the specific room
                     if (!onlineUsers.has(recipientId.toString())) {
                         await sendPushNotification(recipientId, {
                             title: `New Message from ${username}`,
@@ -191,6 +189,52 @@ module.exports = (io) => {
             } catch (err) {
                 console.error("Error sending message:", err);
                 socket.emit("error", { message: "Failed to send message" });
+            }
+        });
+
+        // ─────────────────────────────────────────────────
+        // VOICE MESSAGE: Broadcast after REST upload
+        // Client calls POST /api/chat/upload/voice first, then emits this
+        // event with the returned message object so all room members get it.
+        // ─────────────────────────────────────────────────
+        socket.on("broadcast_voice_message", async (data) => {
+            try {
+                // data = { roomId, message } — message is the populated doc returned by REST upload
+                const { roomId, message } = data;
+
+                if (!roomId || !message) {
+                    return socket.emit("error", { message: "roomId and message are required" });
+                }
+
+                // Verify room exists and sender is a participant
+                const room = await Room.findById(roomId);
+                if (!room) {
+                    return socket.emit("error", { message: "Room not found" });
+                }
+
+                // Broadcast to all room members (including sender, for multi-device)
+                io.to(roomId).emit("receive_message", message);
+
+                // Push notification for offline participants
+                const recipients = room.participants.filter(p => p.toString() !== userId);
+                recipients.forEach(async (recipientId) => {
+                    if (!onlineUsers.has(recipientId.toString())) {
+                        await sendPushNotification(recipientId, {
+                            title: `🎤 Voice message from ${username}`,
+                            body: "Sent you a voice message",
+                            data: {
+                                roomId: roomId.toString(),
+                                type: "CHAT_VOICE_MESSAGE",
+                                senderId: userId,
+                            }
+                        });
+                    }
+                });
+
+                console.log(`🎤 ${username} → Room ${roomId}: voice message broadcast`);
+            } catch (err) {
+                console.error("Error broadcasting voice message:", err);
+                socket.emit("error", { message: "Failed to broadcast voice message" });
             }
         });
 
@@ -347,7 +391,12 @@ module.exports = (io) => {
                 {
                     event: "send_message",
                     args: '{ roomId, text, messageType? ("text"|"image"|"file") }',
-                    description: "Send a message to a room. Saved to DB & broadcast to all room members.",
+                    description: "Send a text message to a room. Saved to DB & broadcast to all room members.",
+                },
+                {
+                    event: "broadcast_voice_message",
+                    args: "{ roomId, message }",
+                    description: "Broadcast a voice message to all room members AFTER uploading via POST /api/chat/upload/voice. 'message' is the object returned by the REST endpoint.",
                 },
                 {
                     event: "load_more_messages",

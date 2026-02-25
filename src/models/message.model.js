@@ -15,18 +15,33 @@ const messageSchema = new mongoose.Schema(
             required: true,
         },
 
+        // Text content — optional for voice messages
         text: {
             type: String,
-            required: true,
             trim: true,
+            default: "",
         },
 
-        // Message type: text, image, file, system
+        // Message type: text, image, file, voice, system
         messageType: {
             type: String,
-            enum: ["text", "image", "file", "system"],
+            enum: ["text", "image", "file", "voice", "system"],
             default: "text",
         },
+
+        // ─── Voice Message Fields ───────────────────────
+        // URL path to the stored audio file (e.g. /uploads/voice/filename.m4a)
+        voiceUrl: {
+            type: String,
+            default: null,
+        },
+
+        // Duration of the voice note in seconds
+        voiceDuration: {
+            type: Number,
+            default: null,
+        },
+        // ────────────────────────────────────────────────
 
         isRead: {
             type: Boolean,

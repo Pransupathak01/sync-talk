@@ -1,3 +1,4 @@
+const path = require("path");
 const Message = require("../models/message.model");
 const Room = require("../models/room.model");
 const User = require("../models/user.model");
@@ -303,6 +304,74 @@ const getReferralContacts = async (req, res) => {
     }
 };
 
+// ─────────────────────────────────────────────────
+// POST /api/chat/upload/voice — Upload a voice message audio file
+// Body: multipart/form-data  { audio: <file>, roomId: string, duration?: number }
+// ─────────────────────────────────────────────────
+const uploadVoiceMessage = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "No audio file uploaded" });
+        }
+
+        const { roomId, duration } = req.body;
+        const userId = req.user._id;
+
+        if (!roomId) {
+            return res.status(400).json({ success: false, message: "roomId is required" });
+        }
+
+        // Verify room exists and user is a participant
+        const room = await Room.findById(roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: "Room not found" });
+        }
+
+        if (!room.participants.map(String).includes(String(userId))) {
+            return res.status(403).json({ success: false, message: "Not a participant of this room" });
+        }
+
+        // Build the public URL for the voice file
+        // Files are served as /uploads/voice/<filename> via static middleware
+        const voiceUrl = `/uploads/voice/${req.file.filename}`;
+        const voiceDuration = duration ? parseFloat(duration) : null;
+
+        // Save message to DB
+        const newMessage = new Message({
+            roomId,
+            sender: userId,
+            text: "",                   // no text for voice messages
+            messageType: "voice",
+            voiceUrl,
+            voiceDuration,
+            readBy: [userId],           // sender has already "heard" it
+        });
+        await newMessage.save();
+
+        // Populate sender info
+        const populatedMessage = await Message.findById(newMessage._id)
+            .populate("sender", "username avatar")
+            .lean();
+
+        // Update room's last message
+        await Room.findByIdAndUpdate(roomId, {
+            lastMessage: {
+                text: "🎤 Voice message",
+                sender: userId,
+                timestamp: new Date(),
+            },
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: populatedMessage,
+        });
+    } catch (err) {
+        console.error("Error uploading voice message:", err);
+        res.status(500).json({ success: false, message: "Failed to upload voice message" });
+    }
+};
+
 module.exports = {
     getRooms,
     getMessages,
@@ -310,4 +379,5 @@ module.exports = {
     getRoomDetails,
     getChatUsers,
     getReferralContacts,
+    uploadVoiceMessage,
 };

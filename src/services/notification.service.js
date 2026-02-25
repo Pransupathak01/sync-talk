@@ -1,5 +1,29 @@
 const { admin } = require("../config/firebase");
 const User = require("../models/user.model");
+const Notification = require("../models/notification.model");
+
+/**
+ * Save a notification record to the database for inbox display
+ */
+const saveNotificationToDB = async (userId, { title, body, data = {} }) => {
+    try {
+        const type = data.type || "GENERAL";
+        await Notification.create({ user: userId, title, body, data, type });
+    } catch (err) {
+        console.error("Failed to save notification to DB:", err.message);
+    }
+};
+
+/**
+ * Sanitize data object to ensure all values are strings (FCM requirement)
+ */
+const sanitizeData = (data = {}) => {
+    const sanitized = {};
+    Object.keys(data).forEach(key => {
+        sanitized[key] = String(data[key]);
+    });
+    return sanitized;
+};
 
 /**
  * Send a push notification to a specific user
@@ -10,36 +34,36 @@ const sendPushNotification = async (userId, { title, body, data = {} }) => {
     try {
         const user = await User.findById(userId);
 
-        if (!user || !user.fcmToken) {
-            console.log(`User ${userId} not found or has no FCM token`);
+        if (!user) {
+            console.log(`User ${userId} not found`);
             return;
         }
 
-        // Ensure all data values are strings (FCM requirement)
-        const sanitizedData = {};
-        Object.keys(data).forEach(key => {
-            sanitizedData[key] = String(data[key]);
-        });
+        // Always save to DB so the user can see it in their notification inbox
+        await saveNotificationToDB(userId, { title, body, data });
+
+        if (!user.fcmToken) {
+            console.log(`User ${user.username} has no FCM token – saved to DB only`);
+            return;
+        }
+
+        const sanitizedData = sanitizeData(data);
 
         const message = {
-            notification: {
-                title,
-                body,
-            },
+            notification: { title, body },
             data: sanitizedData,
             android: {
-                priority: 'high',
+                priority: "high",
                 notification: {
-                    channelId: 'sound_channel_final', // Ensure this matches your frontend channel ID
-                    sound: 'default',
-                    priority: 'high',
+                    channelId: "sound_channel_final",
+                    sound: "default",
+                    priority: "high",
                 },
             },
-            // For iOS
             apns: {
                 payload: {
                     aps: {
-                        sound: 'default',
+                        sound: "default",
                         contentAvailable: true,
                     },
                 },
@@ -48,7 +72,7 @@ const sendPushNotification = async (userId, { title, body, data = {} }) => {
         };
 
         const response = await admin.messaging().send(message);
-        console.log("Successfully sent message to user:", user.username, "Response:", response);
+        console.log("Notification sent to:", user.username, "| Msg ID:", response);
         return response;
     } catch (error) {
         console.error("Error sending push notification:", error);
@@ -65,30 +89,30 @@ const sendMulticastNotification = async (userIds, { title, body, data = {} }) =>
         const users = await User.find({ _id: { $in: userIds }, fcmToken: { $ne: "" } });
         const tokens = users.map(u => u.fcmToken);
 
+        // Save to DB for all users regardless of FCM token
+        await Promise.all(
+            userIds.map(uid => saveNotificationToDB(uid, { title, body, data }))
+        );
+
         if (tokens.length === 0) return;
 
-        // Ensure all data values are strings (FCM requirement)
-        const sanitizedData = {};
-        Object.keys(data).forEach(key => {
-            sanitizedData[key] = String(data[key]);
-        });
+        const sanitizedData = sanitizeData(data);
 
         const message = {
             notification: { title, body },
             data: sanitizedData,
             android: {
-                priority: 'high',
+                priority: "high",
                 notification: {
-                    channelId: 'sound_channel_final', // Ensure this matches your frontend channel ID
-                    sound: 'default',
-                    priority: 'high',
+                    channelId: "sound_channel_final",
+                    sound: "default",
+                    priority: "high",
                 },
             },
-            // For iOS
             apns: {
                 payload: {
                     aps: {
-                        sound: 'default',
+                        sound: "default",
                         contentAvailable: true,
                     },
                 },
@@ -97,7 +121,7 @@ const sendMulticastNotification = async (userIds, { title, body, data = {} }) =>
         };
 
         const response = await admin.messaging().sendEachForMulticast(message);
-        console.log(`${response.successCount} messages were sent successfully out of ${tokens.length}`);
+        console.log(`${response.successCount}/${tokens.length} multicast messages sent`);
         return response;
     } catch (error) {
         console.error("Error sending multicast notification:", error);

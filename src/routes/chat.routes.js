@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { protect } = require("../middleware/auth.middleware");
+const { uploadVoice } = require("../utils/upload.util");
 const {
     getRooms,
     getMessages,
@@ -8,6 +9,7 @@ const {
     getRoomDetails,
     getChatUsers,
     getReferralContacts,
+    uploadVoiceMessage,
 } = require("../controllers/chat.controller");
 
 // All chat routes are protected
@@ -31,4 +33,17 @@ router.get("/rooms/:roomId/messages", getMessages);
 // Get available users to chat with
 router.get("/users", getChatUsers);
 
+// ─── Voice Message Upload ──────────────────────────────────────────────────
+// POST /api/chat/upload/voice
+// multipart/form-data: { audio: <file>, roomId: string, duration?: number }
+// Returns the saved Message document. Frontend should then emit "broadcast_voice_message"
+// over the socket so all room members receive it in real-time.
+router.post(
+    "/upload/voice",
+    uploadVoice.single("audio"),
+    uploadVoiceMessage
+);
+// ───────────────────────────────────────────────────────────────────────────
+
 module.exports = router;
+
