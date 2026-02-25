@@ -12,7 +12,7 @@ const generateToken = (id) => {
 // @route   POST /api/auth/register
 // @access  Public
 exports.registerUser = async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, referredBy } = req.body;
 
     try {
         const userExists = await User.findOne({ email });
@@ -25,6 +25,7 @@ exports.registerUser = async (req, res) => {
             username,
             email,
             password,
+            referredBy: referredBy || null
         });
 
         if (user) {

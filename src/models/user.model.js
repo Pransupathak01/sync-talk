@@ -76,6 +76,10 @@ const userSchema = new mongoose.Schema(
             state: { type: String, default: "" },
             postalCode: { type: String, default: "" },
             country: { type: String, default: "India" },
+        },
+        fcmToken: {
+            type: String,
+            default: ""
         }
     },
     { timestamps: true }

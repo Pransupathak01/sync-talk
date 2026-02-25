@@ -11,6 +11,7 @@ const cartRoutes = require("./routes/cart.routes");
 const chatRoutes = require("./routes/chat.routes");
 const addressRoutes = require("./routes/address.routes");
 const couponRoutes = require("./routes/coupon.routes");
+const notificationRoutes = require("./routes/notification.routes");
 
 const app = express();
 
@@ -41,5 +42,6 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/addresses", addressRoutes);
 app.use("/api/coupons", couponRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 module.exports = app;

@@ -34,6 +34,14 @@ const orderSchema = mongoose.Schema(
             type: String,
             default: "",
         },
+        couponDiscount: {
+            type: Number,
+            default: 0,
+        },
+        referralDiscount: {
+            type: Number,
+            default: 0,
+        },
         estimatedDelivery: {
             type: Date,
         },

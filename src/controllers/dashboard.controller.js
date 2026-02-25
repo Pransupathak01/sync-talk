@@ -85,7 +85,7 @@ exports.getDashboardSummary = async (req, res) => {
                 },
                 quick_stats: {
                     active_orders: {
-                        count: activeOrdersCount,
+                        count: totalOrdersCount,
                         trend_text: `+${todayOrdersCount} today`
                     },
                     total_orders: {

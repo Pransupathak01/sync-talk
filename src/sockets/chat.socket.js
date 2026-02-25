@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/user.model");
 const Message = require("../models/message.model");
 const Room = require("../models/room.model");
+const { sendPushNotification } = require("../services/notification.service");
 
 // Track online users: { userId: { socketId, username, avatar } }
 const onlineUsers = new Map();
@@ -164,6 +165,27 @@ module.exports = (io) => {
                 // STEP 5 & 6: Broadcast to room → Clients receive
                 // ─────────────────────────────────────────────────
                 io.to(roomId).emit("receive_message", populatedMessage);
+
+                // ─────────────────────────────────────────────────
+                // STEP 8: Send Push Notifications to other participants
+                // ─────────────────────────────────────────────────
+                const recipients = room.participants.filter(p => p.toString() !== userId);
+
+                recipients.forEach(async (recipientId) => {
+                    // We only send push notification if the user is NOT online in the socket
+                    // Or you can send it anyway if they are not active in the specific room
+                    if (!onlineUsers.has(recipientId.toString())) {
+                        await sendPushNotification(recipientId, {
+                            title: `New Message from ${username}`,
+                            body: text.length > 50 ? text.substring(0, 47) + "..." : text,
+                            data: {
+                                roomId: roomId.toString(),
+                                type: "CHAT_MESSAGE",
+                                senderId: userId,
+                            }
+                        });
+                    }
+                });
 
                 console.log(`💬 ${username} → Room ${roomId}: ${text.substring(0, 50)}`);
             } catch (err) {

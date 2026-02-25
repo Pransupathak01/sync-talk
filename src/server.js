@@ -3,8 +3,10 @@ const os = require("os");
 const { Server } = require("socket.io");
 const app = require("./app");
 const { connectDB } = require("./config/db");
+const { initializeFirebase } = require("./config/firebase");
 
 connectDB();
+initializeFirebase();
 
 const server = http.createServer(app);
 
