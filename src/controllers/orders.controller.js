@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const Order = require("../models/order.model");
 const Cart = require("../models/cart.model");
 const User = require("../models/user.model");
@@ -65,11 +66,40 @@ const getAreaOrders = async (req, res) => {
 
 const placeOrder = async (req, res) => {
     try {
-        const { addressId, couponCode, paymentMethod, referralCode } = req.body;
+        const {
+            addressId,
+            couponCode,
+            paymentMethod,
+            referralCode,
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature
+        } = req.body;
 
         if (!addressId) {
             return res.status(400).json({ success: false, message: "Address ID is required" });
         }
+
+        // --- PAYMENT VERIFICATION ---
+        if (paymentMethod !== "COD") {
+            if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Payment details (order_id, payment_id, signature) are required for online payments."
+                });
+            }
+
+            const body = razorpay_order_id + "|" + razorpay_payment_id;
+            const expectedSignature = crypto
+                .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+                .update(body.toString())
+                .digest("hex");
+
+            if (expectedSignature !== razorpay_signature) {
+                return res.status(400).json({ success: false, message: "Invalid payment signature. Payment verification failed." });
+            }
+        }
+        // ---------------------------
 
         // 1. Get user's cart
         const cart = await Cart.findOne({ user: req.user._id }).populate("items.product");
@@ -159,6 +189,9 @@ const placeOrder = async (req, res) => {
                 },
                 status: "Pending",
                 paymentMethod: paymentMethod || "UPI",
+                paymentStatus: paymentMethod === "COD" ? "Pending" : "Captured",
+                razorpayOrderId: razorpay_order_id || "",
+                razorpayPaymentId: razorpay_payment_id || "",
                 couponCode: couponCode || "",
                 referralCode: validatedReferralCode || "",
                 couponDiscount: itemCouponDiscount,

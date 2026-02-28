@@ -68,6 +68,22 @@ exports.getDashboardSummary = async (req, res) => {
             ]
         });
 
+        // Calculate total sales amount (sum of order amounts)
+        const salesAgg = await Order.aggregate([
+            { $match: { ...orderMatch, status: { $in: ["Delivered", "Shipped", "Processing"] } } },
+            { $group: { _id: null, totalSales: { $sum: "$amount" } } }
+        ]);
+        const totalSales = salesAgg.length > 0 ? salesAgg[0].totalSales : 0;
+
+        // Calculate average order value
+        const avgOrderValue = totalOrdersCount > 0 ? (totalSales / totalOrdersCount) : 0;
+
+        // Get recent orders
+        const recentOrders = await Order.find(orderMatch)
+            .sort({ date: -1 })
+            .limit(10)
+            .lean();
+
         const responseData = {
             success: true,
             data: {
@@ -85,11 +101,17 @@ exports.getDashboardSummary = async (req, res) => {
                 },
                 quick_stats: {
                     active_orders: {
-                        count: totalOrdersCount,
+                        count: activeOrdersCount,
                         trend_text: `+${todayOrdersCount} today`
                     },
                     total_orders: {
                         count: totalOrdersCount
+                    },
+                    total_sales: {
+                        amount: totalSales
+                    },
+                    avg_order_value: {
+                        amount: avgOrderValue
                     },
                     referrals: {
                         total_count: referralCount,
@@ -103,6 +125,19 @@ exports.getDashboardSummary = async (req, res) => {
                         unread_count: unreadCount,
                         subtext: "Customer queries"
                     }
+                },
+                performance_metrics: {
+                    totalOrders: totalOrdersCount,
+                    totalSales: totalSales,
+                    avgOrderValue: avgOrderValue,
+                    recentOrders: recentOrders.map(o => ({
+                        id: o._id,
+                        orderId: o.orderId,
+                        customer: o.customerName,
+                        amount: o.amount,
+                        status: o.status,
+                        date: o.date
+                    }))
                 },
                 banner: {
                     id: "promo_101",

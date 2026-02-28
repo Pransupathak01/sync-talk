@@ -26,6 +26,17 @@ const orderSchema = mongoose.Schema(
             enum: ["UPI", "COD", "CARD"],
             default: "UPI",
         },
+        paymentStatus: {
+            type: String,
+            enum: ["Captured", "Pending", "Failed"],
+            default: "Pending",
+        },
+        razorpayOrderId: {
+            type: String,
+        },
+        razorpayPaymentId: {
+            type: String,
+        },
         couponCode: {
             type: String,
             default: "",
