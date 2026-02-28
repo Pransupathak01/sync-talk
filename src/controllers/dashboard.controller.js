@@ -1,6 +1,7 @@
 const User = require("../models/user.model");
 const Message = require("../models/message.model");
 const Order = require("../models/order.model");
+const Room = require("../models/room.model");
 
 // @desc    Get dashboard summary
 // @route   GET /api/dashboard/summary
@@ -61,11 +62,14 @@ exports.getDashboardSummary = async (req, res) => {
         const referralCount = await User.countDocuments({ referredBy: user.referralCode });
 
         // ─── 3. Unread Messages ───
+        // Find all rooms where the user is a participant
+        const userRooms = await Room.find({ participants: user._id }).select("_id");
+        const roomIds = userRooms.map(r => r._id);
+
         const unreadCount = await Message.countDocuments({
-            $or: [
-                { receiver: user._id, isRead: false },
-                { receiver: user.username, isRead: false }
-            ]
+            roomId: { $in: roomIds },
+            sender: { $ne: user._id },
+            readBy: { $nin: [user._id] }
         });
 
         // Calculate total sales amount (sum of order amounts)
