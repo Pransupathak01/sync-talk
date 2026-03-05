@@ -16,20 +16,24 @@ const io = new Server(server, {
 
 require("./sockets/chat.socket")(io);
 
-server.listen(process.env.PORT, () => {
-    console.log(`Server running on port ${process.env.PORT}`);
+const PORT = process.env.PORT || 5000;
 
-    // Get local IP address
-    const networkInterfaces = os.networkInterfaces();
-    let ipAddress = 'localhost';
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 
-    Object.keys(networkInterfaces).forEach((ifname) => {
-        networkInterfaces[ifname].forEach((iface) => {
-            if (iface.family === 'IPv4' && !iface.internal) {
-                ipAddress = iface.address;
-            }
+    // Only log network URL in development
+    if (process.env.NODE_ENV !== 'production') {
+        const networkInterfaces = os.networkInterfaces();
+        let ipAddress = 'localhost';
+
+        Object.keys(networkInterfaces).forEach((ifname) => {
+            networkInterfaces[ifname].forEach((iface) => {
+                if (iface.family === 'IPv4' && !iface.internal) {
+                    ipAddress = iface.address;
+                }
+            });
         });
-    });
 
-    console.log(`Network URL for Frontend: http://${ipAddress}:${process.env.PORT}`);
+        console.log(`Network URL for Frontend: http://${ipAddress}:${PORT}`);
+    }
 });
