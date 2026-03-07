@@ -48,6 +48,19 @@ const messageSchema = new mongoose.Schema(
             default: false,
         },
 
+        status: {
+            type: String,
+            enum: ["sent", "delivered", "read"],
+            default: "sent",
+        },
+
+        deliveredBy: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+            },
+        ],
+
         readBy: [
             {
                 type: mongoose.Schema.Types.ObjectId,

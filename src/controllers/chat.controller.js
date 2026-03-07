@@ -12,7 +12,7 @@ const getRooms = async (req, res) => {
 
         const rooms = await Room.find({ participants: userId })
             .populate("participants", "username avatar status lastSeen")
-            .populate("lastMessage.sender", "username")
+            .populate("lastMessage.sender", "username avatar status")
             .sort({ "lastMessage.timestamp": -1 })
             .lean();
 
@@ -71,6 +71,21 @@ const getMessages = async (req, res) => {
             .lean();
 
         const totalMessages = await Message.countDocuments({ roomId });
+
+        // Mark messages as delivered for the current user
+        const messageIds = messages
+            .filter(m => m.sender?._id.toString() !== userId.toString() && !m.deliveredBy?.some(id => id.toString() === userId.toString()))
+            .map(m => m._id);
+
+        if (messageIds.length > 0) {
+            await Message.updateMany(
+                { _id: { $in: messageIds } },
+                {
+                    $addToSet: { deliveredBy: userId },
+                    $set: { status: "delivered" }
+                }
+            );
+        }
 
         res.json({
             success: true,
@@ -157,7 +172,7 @@ const getRoomDetails = async (req, res) => {
 
         const room = await Room.findById(roomId)
             .populate("participants", "username avatar status lastSeen")
-            .populate("lastMessage.sender", "username")
+            .populate("lastMessage.sender", "username avatar status")
             .lean();
 
         if (!room) {
@@ -251,7 +266,7 @@ const getReferralContacts = async (req, res) => {
                     type: "direct",
                     participants: { $all: [userId, contactId], $size: 2 },
                 })
-                    .populate("lastMessage.sender", "username")
+                    .populate("lastMessage.sender", "username avatar status")
                     .lean();
 
                 // Auto-create room if it doesn't exist
@@ -344,13 +359,15 @@ const uploadVoiceMessage = async (req, res) => {
             messageType: "voice",
             voiceUrl,
             voiceDuration,
+            status: "sent",
             readBy: [userId],           // sender has already "heard" it
+            deliveredBy: [userId],
         });
         await newMessage.save();
 
         // Populate sender info
         const populatedMessage = await Message.findById(newMessage._id)
-            .populate("sender", "username avatar")
+            .populate("sender", "username avatar status")
             .lean();
 
         // Update room's last message
@@ -358,6 +375,7 @@ const uploadVoiceMessage = async (req, res) => {
             lastMessage: {
                 text: "🎤 Voice message",
                 sender: userId,
+                status: "sent",
                 timestamp: new Date(),
             },
         });

@@ -27,6 +27,7 @@ const roomSchema = new mongoose.Schema(
         lastMessage: {
             text: { type: String, default: "" },
             sender: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            status: { type: String, enum: ["sent", "delivered", "read"], default: "sent" },
             timestamp: { type: Date, default: Date.now },
         },
 

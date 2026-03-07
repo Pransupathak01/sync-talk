@@ -99,8 +99,31 @@ module.exports = (io) => {
                 const messages = await Message.find({ roomId })
                     .sort({ createdAt: -1 })
                     .limit(50)
-                    .populate("sender", "username avatar")
+                    .populate("sender", "username avatar status")
                     .lean();
+
+                // Auto-mark messages as delivered for this user
+                const messageIdsToMarkDelivered = messages
+                    .filter(m => m.sender._id.toString() !== userId && !m.deliveredBy?.some(id => id.toString() === userId))
+                    .map(m => m._id);
+
+                if (messageIdsToMarkDelivered.length > 0) {
+                    await Message.updateMany(
+                        { _id: { $in: messageIdsToMarkDelivered } },
+                        {
+                            $addToSet: { deliveredBy: userId },
+                            $set: { status: "delivered" }
+                        }
+                    );
+
+                    // Notify sender that messages were delivered
+                    socket.to(roomId).emit("messages_delivered", {
+                        roomId,
+                        userId,
+                        messageIds: messageIdsToMarkDelivered,
+                        timestamp: new Date(),
+                    });
+                }
 
                 // Send messages in chronological order
                 socket.emit("load_messages", {
@@ -148,6 +171,7 @@ module.exports = (io) => {
                     sender: userId,
                     text: text.trim(),
                     messageType,
+                    status: "sent",
                     readBy: [userId], // Sender has read it
                 });
 
@@ -172,14 +196,19 @@ module.exports = (io) => {
 
                 // Populate sender info for broadcast
                 const populatedMessage = await Message.findById(newMessage._id)
-                    .populate("sender", "username avatar")
+                    .populate("sender", "username avatar status")
                     .lean();
 
                 // Update room's last message
+                // Determine initial lastMessage status
+                const onlineParticipants = room.participants.filter(p => onlineUsers.has(p.toString()) && p.toString() !== userId);
+                let lastMessageStatus = onlineParticipants.length > 0 ? "delivered" : "sent";
+
                 await Room.findByIdAndUpdate(roomId, {
                     lastMessage: {
                         text: messageType === "voice" ? "🎤 Voice message" : text.trim(),
                         sender: userId,
+                        status: lastMessageStatus,
                         timestamp: new Date(),
                     },
                 });
@@ -188,6 +217,22 @@ module.exports = (io) => {
                 // STEP 5 & 6: Broadcast to room → Clients receive
                 // ─────────────────────────────────────────────────
                 io.to(roomId).emit("receive_message", populatedMessage);
+
+                // Auto-mark as delivered for online users
+                if (onlineParticipants.length > 0) {
+                    await Message.findByIdAndUpdate(newMessage._id, {
+                        $addToSet: { deliveredBy: { $each: onlineParticipants } },
+                        $set: { status: "delivered" }
+                    });
+
+                    // Notify sender
+                    socket.emit("messages_delivered", {
+                        roomId,
+                        messageIds: [newMessage._id],
+                        userIds: onlineParticipants,
+                        timestamp: new Date(),
+                    });
+                }
 
                 // ─────────────────────────────────────────────────
                 // STEP 8: Send Push Notifications to other participants
@@ -238,6 +283,35 @@ module.exports = (io) => {
                 // Broadcast to all room members (including sender, for multi-device)
                 io.to(roomId).emit("receive_message", message);
 
+                // Auto-mark as delivered for online users
+                const onlineParticipants = room.participants.filter(p => onlineUsers.has(p.toString()) && p.toString() !== userId);
+                if (onlineParticipants.length > 0) {
+                    await Message.findByIdAndUpdate(message._id, {
+                        $addToSet: { deliveredBy: { $each: onlineParticipants } },
+                        $set: { status: "delivered" }
+                    });
+
+                    // Notify sender
+                    socket.emit("messages_delivered", {
+                        roomId,
+                        messageIds: [message._id],
+                        userIds: onlineParticipants,
+                        timestamp: new Date(),
+                    });
+                }
+
+                // Update room's last message
+                const lastMessageStatus = onlineParticipants.length > 0 ? "delivered" : "sent";
+
+                await Room.findByIdAndUpdate(roomId, {
+                    lastMessage: {
+                        text: "🎤 Voice message",
+                        sender: userId,
+                        status: lastMessageStatus,
+                        timestamp: new Date(),
+                    },
+                });
+
                 // Push notification for offline participants
                 const recipients = room.participants.filter(p => p.toString() !== userId);
                 recipients.forEach(async (recipientId) => {
@@ -276,8 +350,30 @@ module.exports = (io) => {
                 const messages = await Message.find(query)
                     .sort({ createdAt: -1 })
                     .limit(50)
-                    .populate("sender", "username avatar")
+                    .populate("sender", "username avatar status")
                     .lean();
+
+                // Auto-mark as delivered
+                const messageIdsToMarkDelivered = messages
+                    .filter(m => m.sender._id.toString() !== userId && !m.deliveredBy?.some(id => id.toString() === userId))
+                    .map(m => m._id);
+
+                if (messageIdsToMarkDelivered.length > 0) {
+                    await Message.updateMany(
+                        { _id: { $in: messageIdsToMarkDelivered } },
+                        {
+                            $addToSet: { deliveredBy: userId },
+                            $set: { status: "delivered" }
+                        }
+                    );
+
+                    socket.to(roomId).emit("messages_delivered", {
+                        roomId,
+                        userId,
+                        messageIds: messageIdsToMarkDelivered,
+                        timestamp: new Date(),
+                    });
+                }
 
                 socket.emit("older_messages", {
                     roomId,
@@ -299,7 +395,10 @@ module.exports = (io) => {
 
                 await Message.updateMany(
                     { roomId, sender: { $ne: userId }, readBy: { $nin: [userId] } },
-                    { $addToSet: { readBy: userId } }
+                    {
+                        $addToSet: { readBy: userId, deliveredBy: userId },
+                        $set: { status: "read" }
+                    }
                 );
 
                 socket.to(roomId).emit("messages_read", {
@@ -310,6 +409,43 @@ module.exports = (io) => {
                 });
             } catch (err) {
                 console.error("Error marking messages as read:", err);
+            }
+        });
+
+        // ─────────────────────────────────────────────────
+        // Mark messages as delivered
+        // ─────────────────────────────────────────────────
+        socket.on("mark_delivered", async (data) => {
+            try {
+                const { messageIds, roomId } = data;
+
+                if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+                    return;
+                }
+
+                await Message.updateMany(
+                    {
+                        _id: { $in: messageIds },
+                        sender: { $ne: userId },
+                        deliveredBy: { $nin: [userId] },
+                        status: { $ne: "read" } // Don't downgrade from read to delivered
+                    },
+                    {
+                        $addToSet: { deliveredBy: userId },
+                        $set: { status: "delivered" }
+                    }
+                );
+
+                if (roomId) {
+                    socket.to(roomId).emit("messages_delivered", {
+                        roomId,
+                        userId,
+                        messageIds,
+                        timestamp: new Date(),
+                    });
+                }
+            } catch (err) {
+                console.error("Error marking messages as delivered:", err);
             }
         });
 
@@ -430,6 +566,11 @@ module.exports = (io) => {
                     event: "mark_read",
                     args: "{ roomId }",
                     description: "Mark all unread messages in a room as read.",
+                },
+                {
+                    event: "mark_delivered",
+                    args: "{ messageIds, roomId? }",
+                    description: "Mark specific messages as delivered.",
                 },
                 {
                     event: "typing",
