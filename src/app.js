@@ -51,4 +51,16 @@ app.use("/api/coupons", couponRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/payments", paymentRoutes);
 
+// Static uploads
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
+// Global error handler
+app.use((err, req, res, next) => {
+    // console.error(err.stack);
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || "Internal Server Error"
+    });
+});
+
 module.exports = app;

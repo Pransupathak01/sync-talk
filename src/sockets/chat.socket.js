@@ -1,4 +1,6 @@
 const jwt = require("jsonwebtoken");
+const fs = require("fs");
+const path = require("path");
 const User = require("../models/user.model");
 const Message = require("../models/message.model");
 const Room = require("../models/room.model");
@@ -125,10 +127,13 @@ module.exports = (io) => {
         // ─────────────────────────────────────────────────
         socket.on("send_message", async (data) => {
             try {
+                console.log(`📥 [Socket Receive] send_message:`, JSON.stringify(data, null, 2));
                 const { roomId, text, messageType = "text" } = data;
 
-                if (!roomId || !text) {
-                    return socket.emit("error", { message: "roomId and text are required" });
+                // Validation: text is only strictly required for "text" message type
+                if (!roomId || (messageType === "text" && !text)) {
+                    console.error(`❌ Validation failed for send_message: roomId=${roomId}, text=${text}, type=${messageType}`);
+                    return socket.emit("error", { message: "roomId and text (for text messages) are required" });
                 }
 
                 // Verify room exists
@@ -145,6 +150,24 @@ module.exports = (io) => {
                     messageType,
                     readBy: [userId], // Sender has read it
                 });
+
+                // Handle base64 audio if it's a voice message
+                if (messageType === "voice" && data.audio) {
+                    try {
+                        const fileName = `voice_${Date.now()}.m4a`;
+                        const uploadDir = path.join(__dirname, "../../uploads/voice");
+                        if (!fs.existsSync(uploadDir)) {
+                            fs.mkdirSync(uploadDir, { recursive: true });
+                        }
+                        const filePath = path.join(uploadDir, fileName);
+                        const base64Data = data.audio.includes(";base64,") ? data.audio.split(";base64,")[1] : data.audio;
+                        fs.writeFileSync(filePath, Buffer.from(base64Data, "base64"));
+                        newMessage.voiceUrl = `/uploads/voice/${fileName}`;
+                    } catch (err) {
+                        console.error("Error saving voice message file:", err);
+                    }
+                }
+
                 await newMessage.save();
 
                 // Populate sender info for broadcast
@@ -155,7 +178,7 @@ module.exports = (io) => {
                 // Update room's last message
                 await Room.findByIdAndUpdate(roomId, {
                     lastMessage: {
-                        text: text.trim(),
+                        text: messageType === "voice" ? "🎤 Voice message" : text.trim(),
                         sender: userId,
                         timestamp: new Date(),
                     },
