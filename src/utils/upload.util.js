@@ -1,22 +1,21 @@
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../config/cloudinary");
 
-// Ensure uploads/voice directory exists
-const voiceUploadDir = path.join(__dirname, "../../uploads/voice");
-if (!fs.existsSync(voiceUploadDir)) {
-    fs.mkdirSync(voiceUploadDir, { recursive: true });
-}
-
-// ─── Voice Message Storage ───────────────────────────────────────────────────
-const voiceStorage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        cb(null, voiceUploadDir);
-    },
-    filename: (_req, file, cb) => {
-        // e.g.  voice_1708867200000_482.m4a
-        const ext = path.extname(file.originalname) || ".m4a";
-        cb(null, `voice_${Date.now()}_${Math.floor(Math.random() * 1000)}${ext}`);
+// ─── Cloudinary Storage for Voice Messages ───────────────────────────────────
+// Files are uploaded directly to Cloudinary under the "synctalk/voice" folder.
+// Cloudinary returns a secure HTTPS URL which is stored in MongoDB as voiceUrl.
+const voiceStorage = new CloudinaryStorage({
+    cloudinary,
+    params: async (_req, file) => {
+        // Use original extension if available, default to m4a
+        const ext = file.originalname.split(".").pop() || "m4a";
+        return {
+            folder: "synctalk/voice",              // folder in your Cloudinary account
+            resource_type: "video",                // Cloudinary uses "video" type for audio files
+            public_id: `voice_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            format: ext,                           // preserve original format
+        };
     },
 });
 

@@ -346,9 +346,9 @@ const uploadVoiceMessage = async (req, res) => {
             return res.status(403).json({ success: false, message: "Not a participant of this room" });
         }
 
-        // Build the public URL for the voice file
-        // Files are served as /uploads/voice/<filename> via static middleware
-        const voiceUrl = `/uploads/voice/${req.file.filename}`;
+        // Cloudinary returns the full HTTPS URL in req.file.path
+        // e.g. https://res.cloudinary.com/yourapp/video/upload/synctalk/voice/voice_xxx.m4a
+        const voiceUrl = req.file.path;
         const voiceDuration = duration ? parseFloat(duration) : null;
 
         // Save message to DB
@@ -386,7 +386,7 @@ const uploadVoiceMessage = async (req, res) => {
         });
     } catch (err) {
         console.error("Error uploading voice message:", err);
-        res.status(500).json({ success: false, message: "Failed to upload voice message" });
+        res.status(500).json({ success: false, message: err.message || "Failed to upload voice message" });
     }
 };
 
