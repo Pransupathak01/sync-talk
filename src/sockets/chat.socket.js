@@ -471,6 +471,74 @@ module.exports = (io) => {
         });
 
         // ─────────────────────────────────────────────────
+        // Delete message for me (client-side only, acknowledged)
+        // ─────────────────────────────────────────────────
+        socket.on("delete_message_for_me", async (data) => {
+            try {
+                const { messageId } = data;
+                if (!messageId) return;
+
+                await Message.findByIdAndUpdate(messageId, {
+                    $addToSet: { deletedFor: userId },
+                });
+
+                // Acknowledge to the requester only
+                socket.emit("message_deleted_for_me", { messageId });
+                console.log(`🗑️ ${username} deleted message ${messageId} for themselves`);
+            } catch (err) {
+                console.error("Error deleting message for me:", err);
+                socket.emit("error", { message: "Failed to delete message" });
+            }
+        });
+
+        // ─────────────────────────────────────────────────
+        // Delete message for everyone (broadcast to room)
+        // Only sender can do this, within 60 minutes
+        // ─────────────────────────────────────────────────
+        socket.on("delete_message_for_everyone", async (data) => {
+            try {
+                const { messageId, roomId } = data;
+                if (!messageId || !roomId) return;
+
+                const message = await Message.findById(messageId);
+                if (!message) {
+                    return socket.emit("error", { message: "Message not found" });
+                }
+
+                // Only sender can delete for everyone
+                if (String(message.sender) !== userId) {
+                    return socket.emit("error", { message: "Only the sender can delete for everyone" });
+                }
+
+                // Time restriction: within 60 minutes
+                const minutesSinceSent = (Date.now() - new Date(message.createdAt).getTime()) / 1000 / 60;
+                if (minutesSinceSent > 60) {
+                    return socket.emit("error", { message: "You can only delete messages within 60 minutes" });
+                }
+
+                // Update in DB
+                await Message.findByIdAndUpdate(messageId, {
+                    $set: {
+                        isDeletedForEveryone: true,
+                        text: "",
+                        voiceUrl: null,
+                    },
+                });
+
+                // Broadcast to ALL room members so they see it instantly
+                io.to(roomId).emit("message_deleted_for_everyone", {
+                    messageId,
+                    roomId,
+                });
+
+                console.log(`🗑️ ${username} deleted message ${messageId} for everyone in room ${roomId}`);
+            } catch (err) {
+                console.error("Error deleting message for everyone:", err);
+                socket.emit("error", { message: "Failed to delete message for everyone" });
+            }
+        });
+
+        // ─────────────────────────────────────────────────
         // Leave room
         // ─────────────────────────────────────────────────
         socket.on("leave_room", (data) => {

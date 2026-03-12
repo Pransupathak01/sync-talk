@@ -16,6 +16,11 @@ const io = new Server(server, {
 
 require("./sockets/chat.socket")(io);
 
+// Inject io into the chat controller so REST delete endpoints can broadcast
+const { setIo } = require("./controllers/chat.controller");
+setIo(io);
+
+
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {

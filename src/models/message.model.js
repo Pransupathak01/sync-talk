@@ -67,6 +67,23 @@ const messageSchema = new mongoose.Schema(
                 ref: "User",
             },
         ],
+
+        // ─── Delete for Me ───────────────────────────────
+        // Array of userIds who deleted this message for themselves only
+        deletedFor: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+            },
+        ],
+
+        // ─── Delete for Everyone ─────────────────────────
+        // True when sender deletes message for all participants
+        isDeletedForEveryone: {
+            type: Boolean,
+            default: false,
+        },
+        // ────────────────────────────────────────────────
     },
     { timestamps: true }
 );

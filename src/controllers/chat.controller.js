@@ -3,6 +3,10 @@ const Message = require("../models/message.model");
 const Room = require("../models/room.model");
 const User = require("../models/user.model");
 
+// io instance injected at app startup — used for REST-triggered socket broadcasts
+let _io = null;
+const setIo = (io) => { _io = io; };
+
 // ─────────────────────────────────────────────────
 // GET /api/chat/rooms — Get all rooms for logged-in user
 // ─────────────────────────────────────────────────
@@ -390,7 +394,101 @@ const uploadVoiceMessage = async (req, res) => {
     }
 };
 
+// ─────────────────────────────────────────────────
+// DELETE /api/chat/messages/:messageId/delete-for-me
+// Hides the message only for the requesting user
+// ─────────────────────────────────────────────────
+const deleteMessageForMe = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ success: false, message: "Message not found" });
+        }
+
+        // Verify the user is a participant of the room
+        const room = await Room.findById(message.roomId);
+        if (!room || !room.participants.map(String).includes(String(userId))) {
+            return res.status(403).json({ success: false, message: "Not a participant of this room" });
+        }
+
+        // Add userId to deletedFor array (if not already there)
+        await Message.findByIdAndUpdate(messageId, {
+            $addToSet: { deletedFor: userId },
+        });
+
+        return res.json({
+            success: true,
+            message: "Message deleted for you",
+            messageId,
+            deleteType: "for_me",
+        });
+    } catch (err) {
+        console.error("Error deleting message for me:", err);
+        res.status(500).json({ success: false, message: err.message || "Failed to delete message" });
+    }
+};
+
+// ─────────────────────────────────────────────────
+// DELETE /api/chat/messages/:messageId/delete-for-everyone
+// Deletes the message for ALL participants in the room
+// Only the original sender can do this (within 60 mins)
+// ─────────────────────────────────────────────────
+const deleteMessageForEveryone = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ success: false, message: "Message not found" });
+        }
+
+        // Only the original sender can delete for everyone
+        if (String(message.sender) !== String(userId)) {
+            return res.status(403).json({ success: false, message: "Only the sender can delete this message for everyone" });
+        }
+
+        // Time-limited: within 60 minutes of sending (WhatsApp-style)
+        const minutesSinceSent = (Date.now() - new Date(message.createdAt).getTime()) / 1000 / 60;
+        if (minutesSinceSent > 60) {
+            return res.status(400).json({ success: false, message: "You can only delete messages within 60 minutes of sending" });
+        }
+
+        const roomId = message.roomId.toString();
+
+        // Wipe content and flag as deleted for everyone
+        await Message.findByIdAndUpdate(messageId, {
+            $set: {
+                isDeletedForEveryone: true,
+                text: "",
+                voiceUrl: null,
+            },
+        });
+
+        // Real-time broadcast so all room members update their UI instantly
+        if (_io) {
+            _io.to(roomId).emit("message_deleted_for_everyone", { messageId, roomId });
+        }
+
+        console.log(`[REST] Message ${messageId} deleted for everyone in room ${roomId}`);
+
+        return res.json({
+            success: true,
+            messageId,
+            roomId,
+            message: "Message deleted for everyone",
+        });
+    } catch (err) {
+        console.error("Error in deleteMessageForEveryone:", err);
+        res.status(500).json({ success: false, message: err.message || "Failed to delete message for everyone" });
+    }
+};
+
 module.exports = {
+    setIo,
     getRooms,
     getMessages,
     createRoom,
@@ -398,4 +496,6 @@ module.exports = {
     getChatUsers,
     getReferralContacts,
     uploadVoiceMessage,
+    deleteMessageForMe,
+    deleteMessageForEveryone,
 };

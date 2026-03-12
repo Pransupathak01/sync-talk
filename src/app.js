@@ -24,7 +24,7 @@ app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 
-app.get("/health", (req, res) => {
+app.get("/api/health", (req, res) => {
     res.send("SyncTalk API Running");
 });
 

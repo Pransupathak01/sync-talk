@@ -10,6 +10,8 @@ const {
     getChatUsers,
     getReferralContacts,
     uploadVoiceMessage,
+    deleteMessageForMe,
+    deleteMessageForEveryone,
 } = require("../controllers/chat.controller");
 
 // All chat routes are protected
@@ -45,5 +47,15 @@ router.post(
 );
 // ───────────────────────────────────────────────────────────────────────────
 
-module.exports = router;
+// ─── Message Delete Endpoints ──────────────────────────────────────────────
+// DELETE /api/chat/messages/:messageId/delete-for-me
+// Hides the message only for the requesting user (added to deletedFor[])
+router.delete("/messages/:messageId/delete-for-me", deleteMessageForMe);
 
+// DELETE /api/chat/messages/:messageId/delete-for-everyone
+// Permanently deletes message content for all participants (sender only, ≤60 min)
+// Also broadcasts socket event "message_deleted_for_everyone" to the room
+router.delete("/messages/:messageId/delete-for-everyone", deleteMessageForEveryone);
+// ───────────────────────────────────────────────────────────────────────────
+
+module.exports = router;
