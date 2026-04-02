@@ -51,6 +51,32 @@ app.use("/api/coupons", couponRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/payments", paymentRoutes);
 
+// ─────────────────────────────────────────────────────
+// FinTech App Routes  (completely separate from SyncTalk)
+// All collections prefixed with ft_ in MongoDB
+// ─────────────────────────────────────────────────────
+const ftAuthRoutes         = require("./routes/fintech/ft_auth.routes");
+const ftUserRoutes         = require("./routes/fintech/ft_user.routes");
+const ftWalletRoutes       = require("./routes/fintech/ft_wallet.routes");
+const ftTransactionRoutes  = require("./routes/fintech/ft_transaction.routes");
+const ftBeneficiaryRoutes  = require("./routes/fintech/ft_beneficiary.routes");
+const ftKycRoutes          = require("./routes/fintech/ft_kyc.routes");
+const ftCardRoutes         = require("./routes/fintech/ft_card.routes");
+const ftAccountRoutes      = require("./routes/fintech/ft_account.routes");
+const ftLoanRoutes         = require("./routes/fintech/ft_loan.routes");
+const ftDashboardRoutes    = require("./routes/fintech/ft_dashboard.routes");
+
+app.use("/api/ft/auth",         ftAuthRoutes);
+app.use("/api/ft/users",        ftUserRoutes);
+app.use("/api/ft/wallet",       ftWalletRoutes);
+app.use("/api/ft/transactions", ftTransactionRoutes);
+app.use("/api/ft/beneficiaries",ftBeneficiaryRoutes);
+app.use("/api/ft/kyc",          ftKycRoutes);
+app.use("/api/ft/cards",        ftCardRoutes);
+app.use("/api/ft/accounts",     ftAccountRoutes);
+app.use("/api/ft/loans",        ftLoanRoutes);
+app.use("/api/ft/dashboard",    ftDashboardRoutes);
+
 // Static uploads
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
