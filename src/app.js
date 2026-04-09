@@ -65,6 +65,7 @@ const ftCardRoutes         = require("./routes/fintech/ft_card.routes");
 const ftAccountRoutes      = require("./routes/fintech/ft_account.routes");
 const ftLoanRoutes         = require("./routes/fintech/ft_loan.routes");
 const ftDashboardRoutes    = require("./routes/fintech/ft_dashboard.routes");
+const ftReconciliationRoutes = require("./routes/fintech/ft_reconciliation.routes");
 
 app.use("/api/ft/auth",         ftAuthRoutes);
 app.use("/api/ft/users",        ftUserRoutes);
@@ -76,6 +77,7 @@ app.use("/api/ft/cards",        ftCardRoutes);
 app.use("/api/ft/accounts",     ftAccountRoutes);
 app.use("/api/ft/loans",        ftLoanRoutes);
 app.use("/api/ft/dashboard",    ftDashboardRoutes);
+app.use("/api/ft/reconciliation", ftReconciliationRoutes);
 
 // Static uploads
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));

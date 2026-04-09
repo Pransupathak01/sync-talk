@@ -118,42 +118,104 @@ exports.sendMoney = async (req, res) => {
 /**
  * @route  GET /api/ft/transactions
  * @access Private
- * Get paginated transaction history for the logged-in user
+ * @desc   Get paginated transaction history with advanced filtering and search
  */
 exports.getTransactions = async (req, res) => {
     try {
-        const { page = 1, limit = 20, type, status, category, startDate, endDate } = req.query;
-        const skip = (Number(page) - 1) * Number(limit);
+        const {
+            page = 1,
+            limit = 20,
+            q = "",
+            type,
+            status,
+            category,
+            startDate,
+            endDate,
+        } = req.query;
 
+        const pageNum = Number(page);
+        const limitNum = Number(limit);
+        const skip = (pageNum - 1) * limitNum;
+
+        // 1. Build Base Filter (Authentication Scope)
         const filter = {
             $or: [{ senderId: req.ftUser._id }, { receiverId: req.ftUser._id }],
         };
 
+        // 2. Add Filters
         if (type) filter.type = type;
         if (status) filter.status = status;
         if (category) filter.category = category;
+
+        // Date Range
         if (startDate || endDate) {
             filter.createdAt = {};
             if (startDate) filter.createdAt.$gte = new Date(startDate);
             if (endDate) filter.createdAt.$lte = new Date(endDate);
         }
 
-        const [transactions, total] = await Promise.all([
+        // Search Query (Description, Note, or TxID)
+        if (q) {
+            const searchRegex = new RegExp(q, "i");
+            filter.$and = [
+                {
+                    $or: [
+                        { description: searchRegex },
+                        { note: searchRegex },
+                        { transactionId: searchRegex },
+                    ],
+                },
+            ];
+        }
+
+        // 3. Parallel Queries (Data + Counts)
+        const [transactions, totalRecords, successCount, failedCount] = await Promise.all([
             FtTransaction.find(filter)
-                .populate("senderId", "fullName phone avatar")
-                .populate("receiverId", "fullName phone avatar")
                 .sort({ createdAt: -1 })
                 .skip(skip)
-                .limit(Number(limit)),
+                .limit(limitNum)
+                .lean(), // lean for faster read, plain JS objects
+
             FtTransaction.countDocuments(filter),
+
+            // Summary stats for the current filter scope
+            FtTransaction.countDocuments({ ...filter, status: "success" }),
+            FtTransaction.countDocuments({ ...filter, status: "failed" }),
         ]);
 
+        // 4. Map to Frontend Expectation
+        const items = transactions.map((tx) => {
+            const isCredit = tx.receiverId?.toString() === req.ftUser._id.toString();
+
+            return {
+                _id: tx._id,
+                title: tx.description || (isCredit ? "Internal Credit" : "External Payment"),
+                subtitle: `${tx.category || "General"} • ${tx.transactionId}`,
+                amount: tx.amount,
+                status: tx.status,
+                type: isCredit ? "credit" : "debit",
+                category: tx.category || "General",
+                createdAt: tx.createdAt,
+                txDate: tx.createdAt.toISOString().split("T")[0], // YYYY-MM-DD for grouping
+            };
+        });
+
+        // 5. Build Meta and Respond
         return res.status(200).json({
             success: true,
-            total,
-            page: Number(page),
-            totalPages: Math.ceil(total / Number(limit)),
-            transactions,
+            data: {
+                items,
+                meta: {
+                    totalRecords,
+                    totalPages: Math.ceil(totalRecords / limitNum),
+                    currentPage: pageNum,
+                    hasNextPage: skip + items.length < totalRecords,
+                    summary: {
+                        totalSuccess: successCount,
+                        totalFailed: failedCount,
+                    },
+                },
+            },
         });
     } catch (err) {
         console.error("[FT Transaction] GetTransactions error:", err);
